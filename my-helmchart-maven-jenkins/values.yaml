@@ -5,10 +5,10 @@
 replicaCount: 1
 
 image:
-  repository: sreekanthpv12/maven-tomcat:1.0
+  repository: sreekanthpv12/maven-tomcat:2.0
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  #tag: " "
 
 imagePullSecrets: []
 nameOverride: ""
