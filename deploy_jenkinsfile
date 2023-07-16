@@ -1,0 +1,36 @@
+  pipeline {
+    agent any
+    parameters {
+        string(name: 'build_number', defaultValue: '', description: 'The build number for this job')
+    }
+    stages {
+        stage('Build') {
+            steps {
+             echo "${build_number}"
+            }
+    
+        }
+        
+        
+        stage('pull the push helm chart from ecr') {
+            steps {
+                script {
+             
+               
+                 withCredentials([aws(credentialsId: 'ecr-credential', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        
+                        
+                    sh "helm pull  oci://130465145438.dkr.ecr.us-east-1.amazonaws.com/my-helmchart-maven-jenkins --version 1"
+                    
+                    sh "helm install my-helmchart-maven-jenkins my-helmchart-maven-jenkins-1.tgz"
+        
+                    
+                 }
+                 
+            
+            }
+          }
+        }
+    }
+}
+        
