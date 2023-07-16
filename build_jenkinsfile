@@ -1,0 +1,108 @@
+pipeline {
+    agent any
+    environment {
+        build_number = "${env.BUILD_ID}"
+        AWS_ACCOUNT_ID="130465145438"
+        AWS_DEFAULT_REGION="us-east-1"
+        IMAGE_REPO_NAME="my-helmchart-maven-jenkins"
+        IMAGE_TAG="latest"
+        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
+    }
+    tools {
+        maven 'maven'
+    }
+    stages {
+        stage ('git repo') {
+            steps {
+                git branch: 'main', url: 'https://github.com/sreekanthpv12/Helmchart-Jenkins-Maven.git'
+            }
+        }
+        
+        stage ('mvn build') {
+           steps {
+               
+               
+               withSonarQubeEnv('sonar333'){
+                        sh """mvn install sonar:sonar \
+                       -Dsonar.organization=sreekanthpv12 \
+         		-Dsonar.projectKey=Helmchart-Jenkins-Maven-tocken \
+  			-Dsonar.host.url=https://sonarcloud.io
+                          """
+               }
+
+           }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                  sh ' docker build -t sreekanthpv12/maven-tomcat:1.${build_number} .'
+                }
+            }
+        }
+        
+         stage('Deploy Docker Image') {
+            steps {
+                script {
+                withCredentials([string(credentialsId: 'sreekanthpv12', variable: 'dockerhubpwd')]) {
+                    sh 'docker login -u sreekanthpv12 -p ${dockerhubpwd}'
+                   sh 'docker push sreekanthpv12/maven-tomcat:1.${build_number}'
+                    
+                    
+                }
+   
+                    }
+                
+                
+            }
+        }
+        stage('remove docker image from local') {
+            steps {
+                sh 'docker rmi -f sreekanthpv12/maven-tomcat:1.${build_number} '
+            }
+        }
+        
+        stage('helmChart tag and  push to ECR') {
+            steps {
+
+                  sh "sed -i 's|sreekanthpv12/maven-tomcat:2.0|sreekanthpv12/maven-tomcat:${build_number}|g' my-helmchart-maven-jenkins/values.yaml"
+                 }
+        }
+        
+        stage('helm package '){
+            
+            steps {
+                sh "helm package my-helmchart-maven-jenkins/"
+            }
+            
+        }
+        
+            stage('Logging into AWS ECR & push helm chart to ecr') {
+            steps {
+                script {
+             
+               
+                 withCredentials([aws(credentialsId: 'ecr-credential', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        
+                        
+                    sh "aws ecr get-login-password | helm registry login  --username AWS -p \$(aws ecr get-login-password --region us-east-1)  130465145438.dkr.ecr.us-east-1.amazonaws.com"
+                    sh "helm push my-helmchart-maven-jenkins-1.tgz oci://130465145438.dkr.ecr.us-east-1.amazonaws.com" 
+                    sh "rm my-helmchart-maven-jenkins-1.tgz"
+                 }
+                 
+            
+            
+        }
+     }
+    }
+    
+		  stage('pass buildnumber to another pipeline') {
+            steps {
+                
+                build job: 'deplploy-Helmchart-Jenkins-Maven-job', parameters: [string(name: 'build_number', value: "${build_number}")]
+            }
+        }
+        
+    
+    }
+}
